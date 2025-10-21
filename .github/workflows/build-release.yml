@@ -55,8 +55,7 @@ jobs:
           mkdir -p package
           make install DESTDIR=$(pwd)/package
           tar -czf ../clickhouse_fdw-pg${{ matrix.pg_version }}-${{ matrix.os }}.tar.gz \
-            -C package/usr/lib/postgresql/${{ matrix.pg_version }} . \
-            -C ../../../usr/share/postgresql/${{ matrix.pg_version }}/extension .
+            -C package usr/
       
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
