@@ -1,0 +1,39 @@
+name: Build and Release
+on:
+  push:
+    tags: ['v*']
+  
+jobs:
+  build:
+    strategy:
+      matrix:
+        pg_version: [14, 15, 16, 17]
+        os: [ubuntu-24.04]
+    
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            libcurl4-openssl-dev \
+            uuid-dev \
+            postgresql-server-dev-${{ matrix.pg_version }} \
+            pkg-config
+      - name: Build extension with CMake
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DPG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config
+          make
+      - name: Package artifacts
+        run: |
+          cd build
+          tar -czf ../clickhouse_fdw-pg${{ matrix.pg_version }}-${{ matrix.os }}.tar.gz *.so *.control *.sql
+      - name: Upload to release
+        uses: actions/upload-artifact@v3
+        with:
+          name: clickhouse_fdw-pg${{ matrix.pg_version }}-${{ matrix.os }}
+          path: "*.tar.gz"
