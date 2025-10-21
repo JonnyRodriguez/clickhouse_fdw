@@ -1,8 +1,16 @@
 name: Build and Release
+
 on:
   push:
     tags: ['v*']
-  
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+        type: string
+
 jobs:
   build:
     strategy:
@@ -12,7 +20,8 @@ jobs:
     
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -22,18 +31,44 @@ jobs:
             uuid-dev \
             postgresql-server-dev-${{ matrix.pg_version }} \
             pkg-config
-      - name: Build extension with CMake
+      
+      - name: Build extension (Release mode)
         run: |
           mkdir build
           cd build
-          cmake .. -DPG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config
-          make
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config
+          make -j$(nproc)
+      
       - name: Package artifacts
         run: |
           cd build
-          tar -czf ../clickhouse_fdw-pg${{ matrix.pg_version }}-${{ matrix.os }}.tar.gz *.so *.control *.sql
-      - name: Upload to release
+          mkdir -p package
+          make install DESTDIR=$(pwd)/package
+          tar -czf ../clickhouse_fdw-pg${{ matrix.pg_version }}-${{ matrix.os }}.tar.gz \
+            -C package/usr/lib/postgresql/${{ matrix.pg_version }} . \
+            -C ../../../usr/share/postgresql/${{ matrix.pg_version }}/extension .
+      
+      - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: clickhouse_fdw-pg${{ matrix.pg_version }}-${{ matrix.os }}
           path: "*.tar.gz"
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "**/*.tar.gz"
+          generate_release_notes: true
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
