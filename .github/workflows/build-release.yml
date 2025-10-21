@@ -16,19 +16,27 @@ jobs:
     strategy:
       matrix:
         pg_version: [14, 15, 16, 17]
-        os: [ubuntu-24.04]
+        os: [ubuntu-20.04, ubuntu-22.04]
     
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install dependencies
+      - name: Install PostgreSQL APT repository
         run: |
           sudo apt-get update
+          sudo apt-get install -y wget ca-certificates
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+      
+      - name: Install dependencies
+        run: |
           sudo apt-get install -y \
             cmake \
             libcurl4-openssl-dev \
             uuid-dev \
+            postgresql-${{ matrix.pg_version }} \
             postgresql-server-dev-${{ matrix.pg_version }} \
             pkg-config
       
